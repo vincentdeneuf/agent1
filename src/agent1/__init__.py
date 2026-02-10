@@ -9,16 +9,16 @@ __author__ = "vincentdeneuf"
 __email__ = "0189vn@gmail.com"
 
 from .main import (
-    Message,
-    MessageChunk,
-    ContentBlock,
-    TextBlock,
-    ImageBlock,
-    FileBlock,
+    APIType,
     AudioBlock,
     BlockSchema,
+    ContentBlock,
+    FileBlock,
+    ImageBlock,
+    Message,
+    MessageChunk,
     MessageRole,
-    APIType,
+    TextBlock,
 )
 
 __all__ = [

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import json
+from abc import ABC, abstractmethod
 from dataclasses import asdict
 from typing import Literal
-from abc import ABC, abstractmethod
 
-import json
 from pydantic import BaseModel, ConfigDict
 
 MessageRole = Literal["system", "developer", "assistant", "user"]
@@ -41,7 +41,7 @@ class ContentBlock(BaseModel, ABC):
     def from_responses_output_content(
         cls,
         output_content: list[dict[str, object]],
-    ) -> list["ContentBlock"]:
+    ) -> list[ContentBlock]:
         blocks: list[ContentBlock] = []
 
         for item in output_content:
@@ -225,7 +225,7 @@ class Message(BaseModel):
         }
 
     @classmethod
-    def from_completion(cls, response: object) -> "Message":
+    def from_completion(cls, response: object) -> Message:
         data = (
             response.model_dump()
             if hasattr(response, "model_dump")
@@ -255,7 +255,7 @@ class Message(BaseModel):
         )
 
     @classmethod
-    def from_responses(cls, response: object) -> "Message":
+    def from_responses(cls, response: object) -> Message:
         data = (
             response.model_dump()
             if hasattr(response, "model_dump")
@@ -272,9 +272,7 @@ class Message(BaseModel):
                 continue
 
             output_content = item.get("content", [])
-            blocks.extend(
-                ContentBlock.from_responses_output_content(output_content)
-            )
+            blocks.extend(ContentBlock.from_responses_output_content(output_content))
 
         if len(blocks) == 1 and isinstance(blocks[0], TextBlock):
             content: str | list[ContentBlock] = blocks[0].text
@@ -294,14 +292,14 @@ class Message(BaseModel):
         response: object,
         *,
         api_type: APIType,
-    ) -> "Message":
+    ) -> Message:
         if api_type == "completion":
             return cls.from_completion(response)
         if api_type == "responses":
             return cls.from_responses(response)
 
     @classmethod
-    def from_chunks(cls, chunks: list["MessageChunk"]) -> "Message":
+    def from_chunks(cls, chunks: list[MessageChunk]) -> Message:
         texts: list[str] = []
         role: MessageRole = "assistant"
         api_type: APIType | None = None
@@ -334,11 +332,11 @@ class Message(BaseModel):
 
     @staticmethod
     def merge(
-        messages: list["Message"],
+        messages: list[Message],
         *,
         output_role: MessageRole = "user",
         api_type: APIType = "completion",
-    ) -> "Message":
+    ) -> Message:
         parts: list[str] = []
 
         for message in messages:
@@ -357,9 +355,10 @@ class Message(BaseModel):
             content="\n\n---\n\n".join(parts),
         )
 
+
 class MessageChunk(Message):
     @classmethod
-    def from_completion(cls, response: object) -> "MessageChunk":
+    def from_completion(cls, response: object) -> MessageChunk:
         data = (
             response.model_dump()
             if hasattr(response, "model_dump")
