@@ -1,4 +1,4 @@
-# agentine
+# agent1
 
 A simple LLM abstraction layer for Python applications.
 
@@ -15,7 +15,7 @@ A simple LLM abstraction layer for Python applications.
 ## Installation
 
 ```bash
-pip install agentine
+pip install agent1
 ```
 
 ## Quick Start
@@ -23,7 +23,7 @@ pip install agentine
 ### Basic Usage
 
 ```python
-from agentine import Message
+from agent1 import Message
 
 # Create a simple text message
 message = Message(
@@ -40,7 +40,7 @@ print(completion_format)
 ### Advanced Usage with Content Blocks
 
 ```python
-from agentine import Message, TextBlock, ImageBlock
+from agent1 import Message, TextBlock, ImageBlock
 
 # Create a message with multiple content types
 message = Message(role="user")
@@ -58,7 +58,7 @@ print("Responses format:", responses_format)
 ### Message Formatting
 
 ```python
-from agentine import Message
+from agent1 import Message
 
 # Create a template message
 message = Message(
@@ -132,8 +132,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 # Clone the repository
-git clone https://github.com/vincentdeneuf/agentine.git
-cd agentine
+git clone https://github.com/vincentdeneuf/agent1.git
+cd agent1
 
 # Install dependencies and create virtual environment
 uv sync
@@ -152,7 +152,7 @@ uv pip install -e .
 uv run pytest
 
 # Run tests with coverage
-uv run pytest --cov=agentine --cov-report=html
+uv run pytest --cov=agent1 --cov-report=html
 ```
 
 ### Building the Package

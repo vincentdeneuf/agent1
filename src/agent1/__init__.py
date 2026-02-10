@@ -1,5 +1,5 @@
 """
-agentine - A simple LLM abstraction layer
+agent1 - A simple LLM abstraction layer
 
 A modern, flexible abstraction layer for LLM applications built on Pydantic.
 """
