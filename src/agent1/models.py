@@ -133,8 +133,13 @@ class Message(BaseModel):
         if not isinstance(self.content, str):
             raise TypeError("Content must be raw JSON string")
 
-        self.data = json.loads(self.content)
-        return self.data
+        try:
+            parsed = json.loads(self.content)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Failed to parse message content as JSON") from exc
+
+        self.data = parsed
+        return parsed
 
     def format(self, data: dict[str, object]) -> None:
         if not data:

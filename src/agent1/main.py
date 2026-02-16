@@ -1,18 +1,18 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Literal
 
 import litellm
 import tomllib
-from core.log import get_logger
 from pydantic import BaseModel, ConfigDict
 
 from .models import Message, MessageChunk
 from .tools import ToolFactory
 
-log = get_logger(__name__)
+log = logging.getLogger(__name__)
 
 ResponseFormat = Literal["text", "json_object", "json_schema"]
 
@@ -103,6 +103,12 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> Message:
+        log.debug(
+            "Agent.work called | model=%s | messages=%d",
+            self.model,
+            len(messages),
+        )
+
         params = self._build_params(
             messages,
             data=data,
@@ -125,6 +131,12 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> Message:
+        log.debug(
+            "Agent.work_async called | model=%s | messages=%d",
+            self.model,
+            len(messages),
+        )
+
         params = self._build_params(
             messages,
             data=data,
@@ -147,6 +159,12 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> Iterator[Message | MessageChunk]:
+        log.debug(
+            "Agent.stream started | model=%s | messages=%d",
+            self.model,
+            len(messages),
+        )
+
         params = self._build_params(
             messages,
             data=data,
@@ -165,6 +183,8 @@ class Agent(BaseModel):
         if chunks:
             yield Message.from_chunks(chunks)
 
+        log.debug("Agent.stream completed")
+
     async def stream_async(
         self,
         messages: list[Message],
@@ -173,6 +193,12 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> AsyncIterator[Message | MessageChunk]:
+        log.debug(
+            "Agent.stream_async started | model=%s | messages=%d",
+            self.model,
+            len(messages),
+        )
+
         params = self._build_params(
             messages,
             data=data,
@@ -192,6 +218,12 @@ class Agent(BaseModel):
 
         if chunks:
             yield Message.from_chunks(chunks)
+
+        log.debug("Agent.stream_async completed")
+
+    # =========================
+    # Factory
+    # =========================
 
     @classmethod
     def from_toml(cls, path: str | Path) -> Agent:
@@ -223,4 +255,12 @@ class Agent(BaseModel):
             else:
                 config[key] = value
 
-        return cls(**config)
+        agent = cls(**config)
+
+        log.debug(
+            "Agent created from TOML | model=%s | path=%s",
+            model,
+            file_path,
+        )
+
+        return agent
