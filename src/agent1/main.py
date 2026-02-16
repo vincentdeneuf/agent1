@@ -11,8 +11,10 @@ from pydantic import BaseModel, ConfigDict
 
 from .models import Message, MessageChunk
 from .tools import ToolFactory
+from .settings import AGENT1_DROP_PARAMS
 
 log = logging.getLogger(__name__)
+litellm.drop_params = AGENT1_DROP_PARAMS
 
 ResponseFormat = Literal["text", "json_object", "json_schema"]
 
@@ -83,7 +85,7 @@ class Agent(BaseModel):
         params.update(kwargs)
         return params
 
-    def _postprocess(self, raw: object) -> Message:
+    def _postwork(self, raw: object) -> Message:
         message = Message.from_litellm(raw)
 
         if self.response_format == "json_object":
@@ -117,7 +119,7 @@ class Agent(BaseModel):
         )
 
         raw = litellm.completion(**params)
-        return self._postprocess(raw)
+        return self._postwork(raw)
 
     # =========================
     # Async
@@ -145,7 +147,7 @@ class Agent(BaseModel):
         )
 
         raw = await litellm.acompletion(**params)
-        return self._postprocess(raw)
+        return self._postwork(raw)
 
     # =========================
     # Streaming

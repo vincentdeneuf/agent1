@@ -15,6 +15,7 @@ authors = [
 ]
 
 dependencies = [
+  "litellm>=1.81.12",
   "pydantic>=2.0.0",
 ]
 
@@ -24,7 +25,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -45,11 +45,12 @@ dev = [
   "pytest>=8",
   "build>=1",
   "twine>=5",
+  "prune-cli>=0.1.1",
 ]
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
