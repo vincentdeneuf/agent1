@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import json
 from abc import ABC
 from dataclasses import asdict
 from typing import Literal
 
-import json
 from pydantic import BaseModel, ConfigDict
-
 
 MessageRole = Literal["system", "developer", "assistant", "user"]
 BlockType = Literal["text", "image_url", "file"]
@@ -16,11 +15,6 @@ def _to_dict(response: object) -> dict[str, object]:
     if hasattr(response, "model_dump"):
         return response.model_dump()
     return asdict(response)
-
-
-# =========================
-# Content Blocks
-# =========================
 
 
 class ContentBlock(BaseModel, ABC):
@@ -45,11 +39,6 @@ class FileBlock(ContentBlock):
     file: dict[str, object]
 
 
-# =========================
-# Message
-# =========================
-
-
 class Message(BaseModel):
     role: MessageRole = "user"
     content: str | list[ContentBlock] = ""
@@ -65,10 +54,6 @@ class Message(BaseModel):
         validate_assignment=True,
     )
 
-    # -------------------------
-    # Content Normalization
-    # -------------------------
-
     @property
     def blocks(self) -> list[ContentBlock]:
         if isinstance(self.content, list):
@@ -80,10 +65,6 @@ class Message(BaseModel):
             self.content = [TextBlock(text=self.content)]
 
         return self.content
-
-    # -------------------------
-    # Block Helpers
-    # -------------------------
 
     def add_text_block(self, text: str) -> None:
         self.blocks.append(TextBlock(text=text))
@@ -113,10 +94,6 @@ class Message(BaseModel):
             )
         )
 
-    # -------------------------
-    # Utilities
-    # -------------------------
-
     def data_from_content(self) -> dict[str, object] | list[object]:
         if not isinstance(self.content, str):
             raise TypeError("Content must be raw JSON string")
@@ -141,10 +118,6 @@ class Message(BaseModel):
             if isinstance(block, TextBlock):
                 block.text = replace(block.text)
 
-    # -------------------------
-    # Serialization
-    # -------------------------
-
     def core(self) -> dict[str, object]:
         if isinstance(self.content, list):
             return {
@@ -156,10 +129,6 @@ class Message(BaseModel):
             "role": self.role,
             "content": self.content,
         }
-
-    # -------------------------
-    # Factories
-    # -------------------------
 
     @classmethod
     def from_completion(cls, response: object) -> Message:
@@ -197,25 +166,15 @@ class Message(BaseModel):
                 return message.content
 
             return " ".join(
-                block.text
-                for block in message.content
-                if isinstance(block, TextBlock)
+                block.text for block in message.content if isinstance(block, TextBlock)
             )
 
-        parts = [
-            f"{m.role}: {stringify(m)}"
-            for m in messages
-        ]
+        parts = [f"{m.role}: {stringify(m)}" for m in messages]
 
         return Message(
             role=output_role,
             content="\n\n---\n\n".join(parts),
         )
-
-
-# =========================
-# Streaming Chunk
-# =========================
 
 
 class MessageChunk(Message):
