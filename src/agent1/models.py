@@ -17,6 +17,11 @@ def _to_dict(response: object) -> dict[str, object]:
     return asdict(response)
 
 
+# =========================
+# Internal Block Models
+# =========================
+
+
 class ContentBlock(BaseModel, ABC):
     type: BlockType
 
@@ -39,6 +44,11 @@ class FileBlock(ContentBlock):
     file: dict[str, object]
 
 
+# =========================
+# Message
+# =========================
+
+
 class Message(BaseModel):
     role: MessageRole = "user"
     content: str | list[ContentBlock] = ""
@@ -54,8 +64,12 @@ class Message(BaseModel):
         validate_assignment=True,
     )
 
+    # -------------------------
+    # Internal Block Access
+    # -------------------------
+
     @property
-    def blocks(self) -> list[ContentBlock]:
+    def _blocks(self) -> list[ContentBlock]:
         if isinstance(self.content, list):
             return self.content
 
@@ -66,8 +80,27 @@ class Message(BaseModel):
 
         return self.content
 
+    # -------------------------
+    # Public Views
+    # -------------------------
+
+    @property
+    def text(self) -> str:
+        if isinstance(self.content, str):
+            return self.content
+
+        return "\n".join(
+            block.text
+            for block in self.content
+            if isinstance(block, TextBlock)
+        )
+
+    # -------------------------
+    # Block Builders
+    # -------------------------
+
     def add_text_block(self, text: str) -> None:
-        self.blocks.append(TextBlock(text=text))
+        self._blocks.append(TextBlock(text=text))
 
     def add_image_block(
         self,
@@ -78,14 +111,14 @@ class Message(BaseModel):
         if detail is not None:
             image_url["detail"] = detail
 
-        self.blocks.append(ImageBlock(image_url=image_url))
+        self._blocks.append(ImageBlock(image_url=image_url))
 
     def add_file_block(
         self,
         file_id: str,
         format: str = "application/pdf",
     ) -> None:
-        self.blocks.append(
+        self._blocks.append(
             FileBlock(
                 file={
                     "file_id": file_id,
@@ -93,6 +126,10 @@ class Message(BaseModel):
                 }
             )
         )
+
+    # -------------------------
+    # Utilities
+    # -------------------------
 
     def data_from_content(self) -> dict[str, object] | list[object]:
         if not isinstance(self.content, str):
@@ -114,11 +151,25 @@ class Message(BaseModel):
             self.content = replace(self.content)
             return
 
-        for block in self.blocks:
+        for block in self._blocks:
             if isinstance(block, TextBlock):
                 block.text = replace(block.text)
 
-    def core(self) -> dict[str, object]:
+    # -------------------------
+    # Serialization
+    # -------------------------
+
+    def core(
+        self,
+        *,
+        text_mode: bool = False,
+    ) -> dict[str, object]:
+        if text_mode:
+            return {
+                "role": self.role,
+                "content": self.text,
+            }
+
         if isinstance(self.content, list):
             return {
                 "role": self.role,
@@ -129,6 +180,10 @@ class Message(BaseModel):
             "role": self.role,
             "content": self.content,
         }
+
+    # -------------------------
+    # Factories
+    # -------------------------
 
     @classmethod
     def from_completion(cls, response: object) -> Message:
@@ -161,20 +216,20 @@ class Message(BaseModel):
         *,
         output_role: MessageRole = "user",
     ) -> Message:
-        def stringify(message: Message) -> str:
-            if isinstance(message.content, str):
-                return message.content
-
-            return " ".join(
-                block.text for block in message.content if isinstance(block, TextBlock)
-            )
-
-        parts = [f"{m.role}: {stringify(m)}" for m in messages]
+        parts = [
+            f"{m.role}: {m.text}"
+            for m in messages
+        ]
 
         return Message(
             role=output_role,
             content="\n\n---\n\n".join(parts),
         )
+
+
+# =========================
+# Streaming Chunk
+# =========================
 
 
 class MessageChunk(Message):
