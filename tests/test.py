@@ -44,7 +44,6 @@ def test_extras_rendering():
         nothing=None,
     )
 
-    # If formatting or patching fails, logging would raise
     assert True
 
     print("test_extras_rendering passed")
@@ -65,7 +64,6 @@ def test_extras_complex_types():
         items=[1, 2, 3],
     )
 
-    # ✅ Test passes if no exception is raised
     assert True
 
     print("test_extras_complex_types passed")
@@ -117,7 +115,6 @@ def test_file_output_text():
         assert "data=" in content
         assert "items=" in content
 
-        # ✅ Release file handle before temp cleanup (Windows)
         Log.clear()
 
     print("test_file_output_text passed")
@@ -151,7 +148,6 @@ def test_json_output():
             items=[1, 2, 3],
         )
 
-        # ✅ Close handlers so file is flushed and unlocked
         Log.clear()
 
         raw = log_file.read_bytes().decode("utf-8").strip()
