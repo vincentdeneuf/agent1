@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from typing import AsyncIterator, Iterator, Literal
+from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
+from typing import Literal
 
 import litellm
 import tomllib
-from importlib import resources
-from pathlib import Path
+from core.log import get_logger
 from pydantic import BaseModel, ConfigDict
 
 from .models import Message, MessageChunk
-from .tool import ToolFactory
-from core.log import get_logger
+from .tools import ToolFactory
 
 log = get_logger(__name__)
 
@@ -48,10 +48,7 @@ class Agent(BaseModel):
             for message in all_messages:
                 message.format(data)
 
-        return [
-            message.core(text_mode=text_mode)
-            for message in all_messages
-        ]
+        return [message.core(text_mode=text_mode) for message in all_messages]
 
     def _build_params(
         self,
@@ -76,8 +73,7 @@ class Agent(BaseModel):
         if self.response_format:
             if self.response_format == "json_schema":
                 raise NotImplementedError(
-                    "response_format='json_schema' "
-                    "is not implemented yet",
+                    "response_format='json_schema' is not implemented yet",
                 )
 
             params["response_format"] = {
@@ -197,7 +193,6 @@ class Agent(BaseModel):
         if chunks:
             yield Message.from_chunks(chunks)
 
-
     @classmethod
     def from_toml(cls, path: str | Path) -> Agent:
         file_path = Path(path).expanduser()
@@ -206,13 +201,9 @@ class Agent(BaseModel):
             file_path = file_path.resolve()
 
         if not file_path.exists():
-            raise FileNotFoundError(
-                f"Agent config not found: {file_path}"
-            )
+            raise FileNotFoundError(f"Agent config not found: {file_path}")
 
-        data = tomllib.loads(
-            file_path.read_text(encoding="utf-8")
-        )
+        data = tomllib.loads(file_path.read_text(encoding="utf-8"))
 
         model: str = data["model"]
         if not isinstance(model, str) or not model.strip():
@@ -233,4 +224,3 @@ class Agent(BaseModel):
                 config[key] = value
 
         return cls(**config)
-

@@ -90,9 +90,7 @@ class Message(BaseModel):
             return self.content
 
         return "\n".join(
-            block.text
-            for block in self.content
-            if isinstance(block, TextBlock)
+            block.text for block in self.content if isinstance(block, TextBlock)
         )
 
     # -------------------------
@@ -216,10 +214,7 @@ class Message(BaseModel):
         *,
         output_role: MessageRole = "user",
     ) -> Message:
-        parts = [
-            f"{m.role}: {m.text}"
-            for m in messages
-        ]
+        parts = [f"{m.role}: {m.text}" for m in messages]
 
         return Message(
             role=output_role,
