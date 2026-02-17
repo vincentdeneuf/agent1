@@ -65,35 +65,22 @@ class Agent(BaseModel):
         system = Message(role="system", content=self.instruction)
         all_messages = [system, *messages]
 
-        params: dict[str, object] = {
-            "model": self.model,
-            "messages": [
-                message.core(
-                    text_mode=text_mode,
-                    data=data,
-                )
-                for message in all_messages
-            ],
-        }
+        params = self.model_dump(exclude_none=True)
 
-        if self.temperature is not None:
-            params["temperature"] = self.temperature
-
-        if self.response_format:
-            if self.response_format == "json_schema":
-                raise NotImplementedError(
-                    "response_format='json_schema' is not implemented yet",
-                )
-
-            params["response_format"] = {
-                "type": self.response_format,
-            }
+        params["messages"] = [
+            message.core(
+                text_mode=text_mode,
+                data=data,
+            )
+            for message in all_messages
+        ]
 
         tools = self.resolved_tools
         if tools:
             params["tools"] = tools
 
         params.update(kwargs)
+
         return params
 
     def work(

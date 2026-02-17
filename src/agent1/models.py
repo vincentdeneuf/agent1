@@ -163,7 +163,6 @@ class Message(BaseModel):
         tags: tuple[str, str] = ("<<", ">>"),
     ) -> str | list[dict[str, object]]:
         """Render content without mutating the original message."""
-
         # Plain string content
         if isinstance(self.content, str):
             return _format(
@@ -205,7 +204,6 @@ class Message(BaseModel):
         tags: tuple[str, str] = ("<<", ">>"),
     ) -> dict[str, object]:
         """Return a LiteLLM-compatible message payload."""
-
         return {
             "role": self.role,
             "content": self._render(
@@ -305,7 +303,7 @@ class MessageChunk(Message):
         }
 
         return cls(
-            role="assistant",
+            role=delta.get("role", "assistant"),
             content=content or "",
             annotations=annotations,
             stats=stats,
