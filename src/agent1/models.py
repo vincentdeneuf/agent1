@@ -12,34 +12,50 @@ BlockType = Literal["text", "image_url", "file"]
 
 
 def _to_dict(response: object) -> dict[str, object]:
+    """Convert a LiteLLM response object into a plain dictionary."""
     if hasattr(response, "model_dump"):
         return response.model_dump()
     return asdict(response)
 
 
 class ContentBlock(BaseModel, ABC):
+    """Base class for structured message content blocks."""
+
     type: BlockType
 
     def core(self) -> dict[str, object]:
+        """Return a LiteLLM-compatible dictionary representation."""
         return self.model_dump(exclude_none=True)
 
 
 class TextBlock(ContentBlock):
+    """Text content block."""
+
     type: Literal["text"] = "text"
     text: str
 
 
 class ImageBlock(ContentBlock):
+    """Image URL content block."""
+
     type: Literal["image_url"] = "image_url"
     image_url: dict[str, object]
 
 
 class FileBlock(ContentBlock):
+    """File reference content block."""
+
     type: Literal["file"] = "file"
     file: dict[str, object]
 
 
 class Message(BaseModel):
+    """Represents a chat message exchanged with a model.
+
+    Supports plain text or structured content blocks, along with
+    metadata, annotations, and parsed JSON data.
+    """
+
     role: MessageRole = "user"
     content: str | list[ContentBlock] = ""
 
@@ -56,6 +72,7 @@ class Message(BaseModel):
 
     @property
     def _blocks(self) -> list[ContentBlock]:
+        """Ensure content is represented as a list of content blocks."""
         if isinstance(self.content, list):
             return self.content
 
@@ -68,6 +85,7 @@ class Message(BaseModel):
 
     @property
     def text(self) -> str:
+        """Return the textual content of the message."""
         if isinstance(self.content, str):
             return self.content
 
@@ -76,6 +94,7 @@ class Message(BaseModel):
         )
 
     def add_text_block(self, text: str) -> None:
+        """Append a text block to the message."""
         self._blocks.append(TextBlock(text=text))
 
     def add_image_block(
@@ -83,6 +102,7 @@ class Message(BaseModel):
         url: str,
         detail: Literal["low", "high"] | None = None,
     ) -> None:
+        """Append an image block to the message."""
         image_url: dict[str, object] = {"url": url}
         if detail is not None:
             image_url["detail"] = detail
@@ -94,6 +114,7 @@ class Message(BaseModel):
         file_id: str,
         format: str = "application/pdf",
     ) -> None:
+        """Append a file reference block to the message."""
         self._blocks.append(
             FileBlock(
                 file={
@@ -104,6 +125,7 @@ class Message(BaseModel):
         )
 
     def data_from_content(self) -> dict[str, object] | list[object]:
+        """Parse message content as JSON and store it in `data`."""
         if not isinstance(self.content, str):
             raise TypeError("Content must be raw JSON string")
 
@@ -116,6 +138,7 @@ class Message(BaseModel):
         return parsed
 
     def format(self, data: dict[str, object]) -> None:
+        """Replace <<key>> placeholders in text content with values."""
         if not data:
             return
 
@@ -137,6 +160,7 @@ class Message(BaseModel):
         *,
         text_mode: bool = False,
     ) -> dict[str, object]:
+        """Return a LiteLLM-compatible message payload."""
         if text_mode:
             return {
                 "role": self.role,
@@ -156,6 +180,7 @@ class Message(BaseModel):
 
     @classmethod
     def from_completion(cls, response: object) -> Message:
+        """Create a Message from a LiteLLM completion response."""
         data = _to_dict(response)
 
         choices = data.pop("choices")
@@ -185,6 +210,7 @@ class Message(BaseModel):
         *,
         output_role: MessageRole = "user",
     ) -> Message:
+        """Merge multiple messages into a single formatted message."""
         parts = [f"{m.role}: {m.text}" for m in messages]
 
         return Message(
@@ -194,8 +220,11 @@ class Message(BaseModel):
 
 
 class MessageChunk(Message):
+    """Represents a streamed partial message chunk."""
+
     @classmethod
     def from_completion(cls, response: object) -> MessageChunk:
+        """Create a MessageChunk from a streamed completion response."""
         data = _to_dict(response)
 
         choices = data.pop("choices")

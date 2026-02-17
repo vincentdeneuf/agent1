@@ -20,6 +20,12 @@ ResponseFormat = Literal["text", "json_object", "json_schema"]
 
 
 class Agent(BaseModel):
+    """High-level wrapper around LiteLLM for chat-based agents.
+
+    Handles message construction, tool resolution, response formatting,
+    streaming, and TOML-based configuration.
+    """
+
     instruction: str
     model: str
 
@@ -36,6 +42,7 @@ class Agent(BaseModel):
 
     @property
     def resolved_tools(self) -> list[dict[str, dict]] | None:
+        """Resolve tool names into LiteLLM-compatible tool definitions."""
         if not self.tools:
             return None
 
@@ -50,6 +57,10 @@ class Agent(BaseModel):
         data: dict[str, object] | None,
         text_mode: bool,
     ) -> list[dict[str, object]]:
+        """Build the full message list including system instruction.
+
+        Optionally formats messages with provided data.
+        """
         system = Message(role="system", content=self.instruction)
         all_messages = [system, *messages]
 
@@ -67,6 +78,7 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> dict[str, object]:
+        """Construct LiteLLM completion parameters from agent configuration."""
         params: dict[str, object] = {
             "model": self.model,
             "messages": self._build_messages(
@@ -97,6 +109,7 @@ class Agent(BaseModel):
         return params
 
     def _postwork(self, raw: object) -> Message:
+        """Convert a raw LiteLLM response into a Message object."""
         message = Message.from_litellm(raw)
 
         if self.response_format == "json_object":
@@ -112,6 +125,7 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> Message:
+        """Execute a synchronous completion request."""
         log.debug(
             "Agent.work called | model=%s | messages=%d",
             self.model,
@@ -136,6 +150,7 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> Message:
+        """Execute an asynchronous completion request."""
         log.debug(
             "Agent.work_async called | model=%s | messages=%d",
             self.model,
@@ -160,6 +175,10 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> Iterator[Message | MessageChunk]:
+        """Stream a synchronous completion response.
+
+        Yields MessageChunk objects followed by the final assembled Message.
+        """
         log.debug(
             "Agent.stream started | model=%s | messages=%d",
             self.model,
@@ -194,6 +213,10 @@ class Agent(BaseModel):
         text_mode: bool = False,
         **kwargs: object,
     ) -> AsyncIterator[Message | MessageChunk]:
+        """Stream an asynchronous completion response.
+
+        Yields MessageChunk objects followed by the final assembled Message.
+        """
         log.debug(
             "Agent.stream_async started | model=%s | messages=%d",
             self.model,
@@ -224,6 +247,7 @@ class Agent(BaseModel):
 
     @classmethod
     def from_toml(cls, path: str | Path) -> Agent:
+        """Create an Agent instance from a TOML configuration file."""
         file_path = Path(path).expanduser()
 
         if not file_path.is_absolute():
