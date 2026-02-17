@@ -26,12 +26,27 @@ class Agent(BaseModel):
     name: str | None = None
     temperature: float | None = None
     response_format: ResponseFormat | None = None
+    tools: list[str] | None = None
 
     model_config = ConfigDict(
         extra="allow",
         from_attributes=True,
         validate_assignment=True,
     )
+
+    # =========================
+    # Tool Resolution
+    # =========================
+
+    @property
+    def resolved_tools(self) -> list[dict[str, dict]] | None:
+        if not self.tools:
+            return None
+
+        return ToolFactory.make(
+            self.tools,
+            model=self.model,
+        )
 
     # =========================
     # Internal Builders
@@ -50,7 +65,10 @@ class Agent(BaseModel):
             for message in all_messages:
                 message.format(data)
 
-        return [message.core(text_mode=text_mode) for message in all_messages]
+        return [
+            message.core(text_mode=text_mode)
+            for message in all_messages
+        ]
 
     def _build_params(
         self,
@@ -81,6 +99,11 @@ class Agent(BaseModel):
             params["response_format"] = {
                 "type": self.response_format,
             }
+
+        # ✅ Inject tools lazily
+        tools = self.resolved_tools
+        if tools:
+            params["tools"] = tools
 
         params.update(kwargs)
         return params
@@ -235,29 +258,21 @@ class Agent(BaseModel):
             file_path = file_path.resolve()
 
         if not file_path.exists():
-            raise FileNotFoundError(f"Agent config not found: {file_path}")
+            raise FileNotFoundError(
+                f"Agent config not found: {file_path}",
+            )
 
-        data = tomllib.loads(file_path.read_text(encoding="utf-8"))
+        data = tomllib.loads(
+            file_path.read_text(encoding="utf-8"),
+        )
 
         model: str = data["model"]
         if not isinstance(model, str) or not model.strip():
-            raise ValueError("Invalid or missing 'model' in config")
+            raise ValueError(
+                "Invalid or missing 'model' in config",
+            )
 
-        config: dict[str, object] = {}
-
-        for key, value in data.items():
-            if not value:
-                continue
-
-            if key == "tools":
-                config[key] = ToolFactory.make(
-                    value,
-                    model=model,
-                )
-            else:
-                config[key] = value
-
-        agent = cls(**config)
+        agent = cls(**data)
 
         log.debug(
             "Agent created from TOML | model=%s | path=%s",
