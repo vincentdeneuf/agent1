@@ -3,10 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
-# =========================
-# Base Provider
-# =========================
-
 
 class ToolProvider(ABC):
     SUPPORTED_MODEL_PREFIXES: ClassVar[tuple[str, ...]] = ()
@@ -24,11 +20,6 @@ class ToolProvider(ABC):
         model: str,
     ) -> list[dict[str, dict]]:
         raise NotImplementedError
-
-
-# =========================
-# Gemini Provider
-# =========================
 
 
 class GeminiToolProvider(ToolProvider):
@@ -74,11 +65,6 @@ class GeminiToolProvider(ToolProvider):
             )
 
         return tools
-
-
-# =========================
-# Factory (Auto-Discovery)
-# =========================
 
 
 class ToolFactory:

@@ -17,11 +17,6 @@ def _to_dict(response: object) -> dict[str, object]:
     return asdict(response)
 
 
-# =========================
-# Internal Block Models
-# =========================
-
-
 class ContentBlock(BaseModel, ABC):
     type: BlockType
 
@@ -44,11 +39,6 @@ class FileBlock(ContentBlock):
     file: dict[str, object]
 
 
-# =========================
-# Message
-# =========================
-
-
 class Message(BaseModel):
     role: MessageRole = "user"
     content: str | list[ContentBlock] = ""
@@ -64,10 +54,6 @@ class Message(BaseModel):
         validate_assignment=True,
     )
 
-    # -------------------------
-    # Internal Block Access
-    # -------------------------
-
     @property
     def _blocks(self) -> list[ContentBlock]:
         if isinstance(self.content, list):
@@ -80,10 +66,6 @@ class Message(BaseModel):
 
         return self.content
 
-    # -------------------------
-    # Public Views
-    # -------------------------
-
     @property
     def text(self) -> str:
         if isinstance(self.content, str):
@@ -92,10 +74,6 @@ class Message(BaseModel):
         return "\n".join(
             block.text for block in self.content if isinstance(block, TextBlock)
         )
-
-    # -------------------------
-    # Block Builders
-    # -------------------------
 
     def add_text_block(self, text: str) -> None:
         self._blocks.append(TextBlock(text=text))
@@ -124,10 +102,6 @@ class Message(BaseModel):
                 }
             )
         )
-
-    # -------------------------
-    # Utilities
-    # -------------------------
 
     def data_from_content(self) -> dict[str, object] | list[object]:
         if not isinstance(self.content, str):
@@ -158,10 +132,6 @@ class Message(BaseModel):
             if isinstance(block, TextBlock):
                 block.text = replace(block.text)
 
-    # -------------------------
-    # Serialization
-    # -------------------------
-
     def core(
         self,
         *,
@@ -183,10 +153,6 @@ class Message(BaseModel):
             "role": self.role,
             "content": self.content,
         }
-
-    # -------------------------
-    # Factories
-    # -------------------------
 
     @classmethod
     def from_completion(cls, response: object) -> Message:
@@ -225,11 +191,6 @@ class Message(BaseModel):
             role=output_role,
             content="\n\n---\n\n".join(parts),
         )
-
-
-# =========================
-# Streaming Chunk
-# =========================
 
 
 class MessageChunk(Message):

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import logging
+import tomllib
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Literal
 
 import litellm
-import tomllib
 from pydantic import BaseModel, ConfigDict
 
 from .models import Message, MessageChunk
-from .tools import ToolFactory
 from .settings import AGENT1_DROP_PARAMS
+from .tools import ToolFactory
 
 log = logging.getLogger(__name__)
 litellm.drop_params = AGENT1_DROP_PARAMS
@@ -34,10 +34,6 @@ class Agent(BaseModel):
         validate_assignment=True,
     )
 
-    # =========================
-    # Tool Resolution
-    # =========================
-
     @property
     def resolved_tools(self) -> list[dict[str, dict]] | None:
         if not self.tools:
@@ -47,10 +43,6 @@ class Agent(BaseModel):
             self.tools,
             model=self.model,
         )
-
-    # =========================
-    # Internal Builders
-    # =========================
 
     def _build_messages(
         self,
@@ -65,10 +57,7 @@ class Agent(BaseModel):
             for message in all_messages:
                 message.format(data)
 
-        return [
-            message.core(text_mode=text_mode)
-            for message in all_messages
-        ]
+        return [message.core(text_mode=text_mode) for message in all_messages]
 
     def _build_params(
         self,
@@ -100,7 +89,6 @@ class Agent(BaseModel):
                 "type": self.response_format,
             }
 
-        # ✅ Inject tools lazily
         tools = self.resolved_tools
         if tools:
             params["tools"] = tools
@@ -115,10 +103,6 @@ class Agent(BaseModel):
             message.data_from_content()
 
         return message
-
-    # =========================
-    # Sync
-    # =========================
 
     def work(
         self,
@@ -144,10 +128,6 @@ class Agent(BaseModel):
         raw = litellm.completion(**params)
         return self._postwork(raw)
 
-    # =========================
-    # Async
-    # =========================
-
     async def work_async(
         self,
         messages: list[Message],
@@ -171,10 +151,6 @@ class Agent(BaseModel):
 
         raw = await litellm.acompletion(**params)
         return self._postwork(raw)
-
-    # =========================
-    # Streaming
-    # =========================
 
     def stream(
         self,
@@ -245,10 +221,6 @@ class Agent(BaseModel):
             yield Message.from_chunks(chunks)
 
         log.debug("Agent.stream_async completed")
-
-    # =========================
-    # Factory
-    # =========================
 
     @classmethod
     def from_toml(cls, path: str | Path) -> Agent:
