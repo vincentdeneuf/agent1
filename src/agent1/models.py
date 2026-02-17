@@ -9,7 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 MessageRole = Literal["system", "developer", "assistant", "user"]
 BlockType = Literal["text", "image_url", "file"]
 
-JSONType: TypeAlias = dict[str, object] | list[object]
+JSONPrimitive: TypeAlias = str | int | float | bool | None
+JSONType: TypeAlias = JSONPrimitive | dict[str, "JSONType"] | list["JSONType"]
 
 
 def _to_dict(response: object) -> dict[str, object]:

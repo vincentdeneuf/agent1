@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import tomllib
 from collections.abc import AsyncIterator, Iterator
@@ -7,6 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 import litellm
+import yaml
 from pydantic import BaseModel, ConfigDict
 
 from .models import Message, MessageChunk
@@ -51,25 +53,6 @@ class Agent(BaseModel):
             model=self.model,
         )
 
-    def _build_messages(
-        self,
-        messages: list[Message],
-        data: dict[str, object] | None,
-        text_mode: bool,
-    ) -> list[dict[str, object]]:
-        """Build the full message list including system instruction.
-
-        Optionally formats messages with provided data.
-        """
-        system = Message(role="system", content=self.instruction)
-        all_messages = [system, *messages]
-
-        if data:
-            for message in all_messages:
-                message.format(data)
-
-        return [message.core(text_mode=text_mode) for message in all_messages]
-
     def _build_params(
         self,
         messages: list[Message],
@@ -79,13 +62,18 @@ class Agent(BaseModel):
         **kwargs: object,
     ) -> dict[str, object]:
         """Construct LiteLLM completion parameters from agent configuration."""
+        system = Message(role="system", content=self.instruction)
+        all_messages = [system, *messages]
+
         params: dict[str, object] = {
             "model": self.model,
-            "messages": self._build_messages(
-                messages,
-                data,
-                text_mode,
-            ),
+            "messages": [
+                message.core(
+                    text_mode=text_mode,
+                    data=data,
+                )
+                for message in all_messages
+            ],
         }
 
         if self.temperature is not None:
@@ -107,15 +95,6 @@ class Agent(BaseModel):
 
         params.update(kwargs)
         return params
-
-    def _postwork(self, raw: object) -> Message:
-        """Convert a raw LiteLLM response into a Message object."""
-        message = Message.from_litellm(raw)
-
-        if self.response_format == "json_object":
-            message.data_from_content()
-
-        return message
 
     def work(
         self,
@@ -140,7 +119,7 @@ class Agent(BaseModel):
         )
 
         raw = litellm.completion(**params)
-        return self._postwork(raw)
+        return Message.from_completion(raw)
 
     async def work_async(
         self,
@@ -165,7 +144,7 @@ class Agent(BaseModel):
         )
 
         raw = await litellm.acompletion(**params)
-        return self._postwork(raw)
+        return Message.from_completion(raw)
 
     def stream(
         self,
@@ -246,34 +225,35 @@ class Agent(BaseModel):
         log.debug("Agent.stream_async completed")
 
     @classmethod
-    def from_toml(cls, path: str | Path) -> Agent:
-        """Create an Agent instance from a TOML configuration file."""
-        file_path = Path(path).expanduser()
+    def load(cls, path: str | Path) -> Agent:
+        """Load an Agent instance from a config file.
 
-        if not file_path.is_absolute():
-            file_path = file_path.resolve()
+        Supported formats: .toml, .json, .yaml, .yml
+        """
+        file_path = Path(path).expanduser().resolve()
+        suffix = file_path.suffix.lower()
 
-        if not file_path.exists():
-            raise FileNotFoundError(
-                f"Agent config not found: {file_path}",
-            )
+        content = file_path.read_text(encoding="utf-8")
 
-        data = tomllib.loads(
-            file_path.read_text(encoding="utf-8"),
-        )
+        if suffix == ".toml":
+            data = tomllib.loads(content)
 
-        model: str = data["model"]
-        if not isinstance(model, str) or not model.strip():
+        elif suffix == ".json":
+            data = json.loads(content)
+
+        elif suffix in {".yaml", ".yml"}:
+            data = yaml.safe_load(content)
+
+        else:
+            supported = [".toml", ".json", ".yaml", ".yml"]
             raise ValueError(
-                "Invalid or missing 'model' in config",
+                f"Unsupported config format '{suffix}'. "
+                f"Supported formats: {', '.join(supported)}."
             )
 
-        agent = cls(**data)
+        if not isinstance(data, dict):
+            raise ValueError(
+                "Config file must define a dictionary at the top level.",
+            )
 
-        log.debug(
-            "Agent created from TOML | model=%s | path=%s",
-            model,
-            file_path,
-        )
-
-        return agent
+        return cls(**data)
