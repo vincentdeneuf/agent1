@@ -12,7 +12,6 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 from .models import Message, MessageChunk
-from .settings import AGENT1_DROP_PARAMS
 from .tools import ToolFactory
 
 log = logging.getLogger(__name__)
@@ -249,4 +248,3 @@ class Agent(BaseModel):
         }
 
         return cls(**cleaned)
-
