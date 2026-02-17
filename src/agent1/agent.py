@@ -16,7 +16,7 @@ from .settings import AGENT1_DROP_PARAMS
 from .tools import ToolFactory
 
 log = logging.getLogger(__name__)
-litellm.drop_params = AGENT1_DROP_PARAMS
+litellm.drop_params = True
 
 ResponseFormat = Literal["text", "json_object", "json_schema"]
 
@@ -80,7 +80,6 @@ class Agent(BaseModel):
             params["tools"] = tools
 
         params.update(kwargs)
-
         return params
 
     def work(
@@ -243,4 +242,11 @@ class Agent(BaseModel):
                 "Config file must define a dictionary at the top level.",
             )
 
-        return cls(**data)
+        cleaned = {
+            key: value
+            for key, value in data.items()
+            if value not in (None, "", [], {}, ())
+        }
+
+        return cls(**cleaned)
+

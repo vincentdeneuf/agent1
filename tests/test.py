@@ -1,196 +1,250 @@
 import json
-import math
+import asyncio
 import tempfile
 from pathlib import Path
 
-from log11 import (
-    Log,
-    LogColor,
-    TextFormatConfig,
-    get_logger,
+import pytest
+import yaml
+
+from agent1 import Message, Agent
+from print9 import print9
+
+
+
+MODEL_NAME = "gemini/gemini-3-flash-preview"
+
+
+INSTRUCTION = (
+    "You are a helpful weather assistant. "
+    "You always answer in <<language>>. "
+    "The user name is <<name>>."
 )
 
-
-class DummyInfo:
-    def __init__(self, code: int, message: str):
-        self.code = code
-        self.message = message
-
-
-def test_default_logger():
-    print("\n--- test_default_logger ---")
-
-    Log.clear()
-    logger = get_logger()
-    logger.info("hello world")
-
-    assert Log._outputs, "Expected default outputs to be configured"
-    assert "default" in Log._outputs
-
-    print("test_default_logger passed")
+DATA = {
+    "language": "Vietnamese",
+    "name": "Vincent",
+}
 
 
-def test_extras_rendering():
-    print("\n--- test_extras_rendering ---")
 
-    Log.clear()
-    logger = get_logger()
 
-    logger.info(
-        "user login",
-        user_id=123,
-        active=True,
-        score=12.5,
-        nothing=None,
+def test_work_sync():
+    agent = Agent(
+        instruction=INSTRUCTION,
+        model=MODEL_NAME,
     )
 
-    assert True
-
-    print("test_extras_rendering passed")
-
-
-def test_extras_complex_types():
-    print("\n--- test_extras_complex_types ---")
-
-    Log.clear()
-    logger = get_logger()
-
-    info = DummyInfo(500, "Boom")
-
-    logger.error(
-        "complex extras",
-        obj=info,
-        data={"x": 1, "y": 2},
-        items=[1, 2, 3],
+    result = agent.work(
+        messages=[
+            Message(
+                role="user",
+                content="What is the weather today?",
+                data=DATA,
+            )
+        ]
     )
 
-    assert True
+    print9("\n[SYNC WORK OUTPUT]", color="blue")
+    print9(result.text, color="white")
 
-    print("test_extras_complex_types passed")
+    assert isinstance(result.text, str)
+    assert len(result.text) > 0
 
 
-def test_file_output_text():
-    print("\n--- test_file_output_text ---")
 
-    with tempfile.TemporaryDirectory() as tmp:
-        log_file = Path(tmp) / "app.log"
 
-        Log.clear()
-        Log.add_output(
-            name="file",
-            sink=log_file,
-            data_format="text",
-            colored=False,
-            level="INFO",
-            text_format_config=TextFormatConfig(
-                date=False,
-                time=False,
-                location=False,
-                function=False,
-            ),
+def test_stream_sync():
+    agent = Agent(
+        instruction=INSTRUCTION,
+        model=MODEL_NAME,
+    )
+
+    final_message = None
+
+    print9("\n[SYNC STREAM OUTPUT]", color="blue")
+
+    for item in agent.stream(
+        messages=[
+            Message(
+                role="user",
+                content="What is the weather today?",
+                data=DATA,
+            )
+        ]
+    ):
+        if hasattr(item, "text"):
+            print9(item.text, color="white", end="", flush=True)
+        final_message = item
+
+    print9("", color="white")
+
+    assert final_message is not None
+    assert isinstance(final_message.text, str)
+    assert len(final_message.text) > 0
+
+
+
+
+@pytest.mark.asyncio
+async def test_work_async():
+    agent = Agent(
+        instruction=INSTRUCTION,
+        model=MODEL_NAME,
+    )
+
+    result = await agent.work_async(
+        messages=[
+            Message(
+                role="user",
+                content="What is the weather today?",
+                data=DATA,
+            )
+        ]
+    )
+
+    print9("\n[ASYNC WORK OUTPUT]", color="cyan")
+    print9(result.text, color="white")
+
+    assert isinstance(result.text, str)
+    assert len(result.text) > 0
+
+
+
+
+@pytest.mark.asyncio
+async def test_stream_async():
+    agent = Agent(
+        instruction=INSTRUCTION,
+        model=MODEL_NAME,
+    )
+
+    final_message = None
+
+    print9("\n[ASYNC STREAM OUTPUT]", color="cyan")
+
+    async for item in agent.stream_async(
+        messages=[
+            Message(
+                role="user",
+                content="What is the weather today?",
+                data=DATA,
+            )
+        ]
+    ):
+        if hasattr(item, "text"):
+            print9(item.text, color="white", end="", flush=True)
+        final_message = item
+
+    print9("", color="white")
+
+    assert final_message is not None
+    assert isinstance(final_message.text, str)
+    assert len(final_message.text) > 0
+
+
+async def _run_async_tests():
+    await test_work_async()
+    await test_stream_async()
+
+
+@pytest.mark.asyncio
+async def test_load_configs(paths: list[str]):
+    for path in paths:
+        print9(f"\n[LOAD TEST] {path}", color="magenta")
+
+        agent = Agent.load(path)
+
+        # ---------- SYNC WORK ----------
+        result = agent.work(
+            messages=[
+                Message(
+                    role="user",
+                    content="What is the weather today?",
+                )
+            ],
+            data=DATA,
         )
 
-        logger = get_logger()
+        print9("[SYNC WORK]", color="blue")
+        print9(result.text, color="white")
 
-        info = DummyInfo(404, "Not Found")
+        assert isinstance(result.text, str)
+        assert len(result.text) > 0
 
-        logger.info(
-            "file message",
-            value=42,
-            empty="",
-            nan_value=math.nan,
-            obj=info,
-            data={"key": "value"},
-            items=[10, 20],
+        # ---------- SYNC STREAM ----------
+        final_message = None
+
+        print9("[SYNC STREAM]", color="blue")
+
+        for item in agent.stream(
+            messages=[
+                Message(
+                    role="user",
+                    content="What is the weather today?",
+                )
+            ],
+            data=DATA,
+        ):
+            if hasattr(item, "text"):
+                print9(item.text, color="white", end="", flush=True)
+            final_message = item
+
+        print9("", color="white")
+
+        assert final_message is not None
+        assert isinstance(final_message.text, str)
+        assert len(final_message.text) > 0
+
+        # ---------- ASYNC WORK ----------
+        result_async = await agent.work_async(
+            messages=[
+                Message(
+                    role="user",
+                    content="What is the weather today?",
+                )
+            ],
+            data=DATA,
         )
 
-        content = log_file.read_text()
-        print(content)
+        print9("[ASYNC WORK]", color="cyan")
+        print9(result_async.text, color="white")
 
-        assert "file message" in content
-        assert "value=42" in content
-        assert "empty=_EMPTY_" in content
-        assert "nan_value=_NAN_" in content
-        assert "DummyInfo" in content
-        assert "data=" in content
-        assert "items=" in content
+        assert isinstance(result_async.text, str)
+        assert len(result_async.text) > 0
 
-        Log.clear()
+        # ---------- ASYNC STREAM ----------
+        final_async_message = None
 
-    print("test_file_output_text passed")
+        print9("[ASYNC STREAM]", color="cyan")
 
+        async for item in agent.stream_async(
+            messages=[
+                Message(
+                    role="user",
+                    content="What is the weather today?",
+                )
+            ],
+            data=DATA,
+        ):
+            if hasattr(item, "text"):
+                print9(item.text, color="white", end="", flush=True)
+            final_async_message = item
 
-def test_json_output():
-    print("\n--- test_json_output ---")
+        print9("", color="white")
 
-    with tempfile.TemporaryDirectory() as tmp:
-        log_file = Path(tmp) / "app.json.log"
-
-        Log.clear()
-        Log.add_output(
-            name="json",
-            sink=log_file,
-            data_format="json",
-            level="INFO",
-        )
-
-        logger = get_logger()
-
-        info = DummyInfo(401, "Unauthorized")
-
-        logger.info(
-            "json message",
-            count=3,
-            ok=True,
-            nothing=None,
-            obj=info,
-            data={"x": 99},
-            items=[1, 2, 3],
-        )
-
-        Log.clear()
-
-        raw = log_file.read_bytes().decode("utf-8").strip()
-        payload = json.loads(raw)
-
-        print(payload)
-
-        record = payload["record"]
-
-        assert record["message"] == "json message"
-        assert record["extra"]["count"] == "3"
-        assert record["extra"]["ok"] == "True"
-        assert record["extra"]["nothing"] == "_NULL_"
-        assert "DummyInfo" in record["extra"]["obj"]
-        assert "x" in record["extra"]["data"]
-        assert "1" in record["extra"]["items"]
-
-    print("test_json_output passed")
-
-
-def test_custom_level():
-    print("\n--- test_custom_level ---")
-
-    Log.clear()
-    Log.add_level("TEMP", 25, LogColor.MAGENTA)
-
-    logger = get_logger()
-    logger.temp("temporary message")
-
-    levels = {level.name for level in logger._core.levels.values()}
-    assert "TEMP" in levels
-
-    print("test_custom_level passed")
-
+        assert final_async_message is not None
+        assert isinstance(final_async_message.text, str)
+        assert len(final_async_message.text) > 0
 
 if __name__ == "__main__":
-    print("\n=== log11 example tests ===")
+    print9("Running tests manually...\n", color="green")
 
-    test_default_logger()
-    test_extras_rendering()
-    test_extras_complex_types()
-    test_file_output_text()
-    test_json_output()
-    test_custom_level()
-
-    print("\n✅ All log11 tests passed")
+    asyncio.run(
+        test_load_configs(
+            [
+                # "tests/config/agent.toml",
+                # "tests/config/agent.json",
+                "tests/config/agent.yaml",
+            ]
+        )
+    )

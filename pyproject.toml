@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent1"
-version = "0.1.16"
+version = "0.1.17"
 description = "A simple LLM abstraction layer"
 readme = "README.md"
 license = { text = "MIT" }
@@ -47,6 +47,7 @@ dev = [
   "build>=1",
   "twine>=5",
   "prune-cli>=0.1.1",
+  "print9>=0.1.6",
 ]
 
 [tool.ruff]

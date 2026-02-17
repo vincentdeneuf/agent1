@@ -20,6 +20,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "build" },
+    { name = "print9" },
     { name = "prune-cli" },
     { name = "pytest" },
     { name = "ruff" },
@@ -36,6 +37,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "build", specifier = ">=1" },
+    { name = "print9", specifier = ">=0.1.6" },
     { name = "prune-cli", specifier = ">=0.1.1" },
     { name = "pytest", specifier = ">=8" },
     { name = "ruff", specifier = ">=0.2" },
@@ -1290,6 +1292,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "print9"
+version = "0.1.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/71/5f5342796ed0886226c21dd950d391e7174a14d3aba1c699ca3595c8ad8f/print9-0.1.6.tar.gz", hash = "sha256:eb99f6ed1bdf4756b2742aa092d9cf604bbe742e4fd365beb4c86585ae39bf4d", size = 4213, upload-time = "2025-08-17T11:24:42.733Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/59/06/fb11427eed79da45b2cd220fe8bb668af7ef185f46f3bdc8d916b55d6ad0/print9-0.1.6-py3-none-any.whl", hash = "sha256:618a4ea118a2e7c206e173d4fa21e7c1710b4ff9a70da9a1d7218b59465f71dd", size = 4269, upload-time = "2025-08-17T11:24:41.238Z" },
 ]
 
 [[package]]

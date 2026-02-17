@@ -163,7 +163,6 @@ class Message(BaseModel):
         tags: tuple[str, str] = ("<<", ">>"),
     ) -> str | list[dict[str, object]]:
         """Render content without mutating the original message."""
-        # Plain string content
         if isinstance(self.content, str):
             return _format(
                 self.content,
@@ -303,7 +302,7 @@ class MessageChunk(Message):
         }
 
         return cls(
-            role=delta.get("role", "assistant"),
+            role="assistant",
             content=content or "",
             annotations=annotations,
             stats=stats,
