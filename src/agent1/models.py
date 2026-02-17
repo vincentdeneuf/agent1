@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import json
-from abc import ABC
 from dataclasses import asdict
-from typing import Literal
+from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 MessageRole = Literal["system", "developer", "assistant", "user"]
 BlockType = Literal["text", "image_url", "file"]
+
+JSONType: TypeAlias = dict[str, object] | list[object]
 
 
 def _to_dict(response: object) -> dict[str, object]:
@@ -18,48 +19,69 @@ def _to_dict(response: object) -> dict[str, object]:
     return asdict(response)
 
 
-class ContentBlock(BaseModel, ABC):
-    """Base class for structured message content blocks."""
+def _format(
+    text: str,
+    data: dict[str, object] | None,
+    *,
+    tags: tuple[str, str] = ("<<", ">>"),
+) -> str:
+    """Render placeholders inside text using provided data.
 
-    type: BlockType
+    Placeholders follow the pattern:
+        <open_tag>key<close_tag>
+    """
+    if not data:
+        return text
 
-    def core(self) -> dict[str, object]:
-        """Return a LiteLLM-compatible dictionary representation."""
-        return self.model_dump(exclude_none=True)
+    open_tag, close_tag = tags
+
+    for key, value in data.items():
+        placeholder = f"{open_tag}{key}{close_tag}"
+        text = text.replace(placeholder, str(value))
+
+    return text
 
 
-class TextBlock(ContentBlock):
-    """Text content block."""
-
+class TextBlock(BaseModel):
     type: Literal["text"] = "text"
     text: str
 
+    def core(self) -> dict[str, object]:
+        return self.model_dump(exclude_none=True)
 
-class ImageBlock(ContentBlock):
-    """Image URL content block."""
 
+class ImageBlock(BaseModel):
     type: Literal["image_url"] = "image_url"
     image_url: dict[str, object]
 
+    def core(self) -> dict[str, object]:
+        return self.model_dump(exclude_none=True)
 
-class FileBlock(ContentBlock):
-    """File reference content block."""
 
+class FileBlock(BaseModel):
     type: Literal["file"] = "file"
     file: dict[str, object]
+
+    def core(self) -> dict[str, object]:
+        return self.model_dump(exclude_none=True)
+
+
+ContentBlock: TypeAlias = Annotated[
+    TextBlock | ImageBlock | FileBlock,
+    Field(discriminator="type"),
+]
 
 
 class Message(BaseModel):
     """Represents a chat message exchanged with a model.
 
-    Supports plain text or structured content blocks, along with
-    metadata, annotations, and parsed JSON data.
+    Supports plain text or structured content blocks,
+    along with metadata and annotations.
     """
 
     role: MessageRole = "user"
     content: str | list[ContentBlock] = ""
 
-    data: dict[str, object] | list[object] | None = None
     annotations: list[dict[str, object]] | None = None
     stats: dict[str, object] | None = None
     meta: dict[str, object] | None = None
@@ -71,7 +93,28 @@ class Message(BaseModel):
     )
 
     @property
-    def _blocks(self) -> list[ContentBlock]:
+    def text(self) -> str:
+        """Return the textual content of the message."""
+        if isinstance(self.content, str):
+            return self.content
+
+        return "\n\n".join(
+            block.text for block in self.content if isinstance(block, TextBlock)
+        )
+
+    @property
+    def data(self) -> JSONType | None:
+        """Parse message text as JSON on access."""
+        raw = self.text.strip()
+        if not raw:
+            return None
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+    def _ensure_blocks(self) -> list[ContentBlock]:
         """Ensure content is represented as a list of content blocks."""
         if isinstance(self.content, list):
             return self.content
@@ -83,39 +126,26 @@ class Message(BaseModel):
 
         return self.content
 
-    @property
-    def text(self) -> str:
-        """Return the textual content of the message."""
-        if isinstance(self.content, str):
-            return self.content
+    def add_text(self, text: str) -> None:
+        self._ensure_blocks().append(TextBlock(text=text))
 
-        return "\n".join(
-            block.text for block in self.content if isinstance(block, TextBlock)
-        )
-
-    def add_text_block(self, text: str) -> None:
-        """Append a text block to the message."""
-        self._blocks.append(TextBlock(text=text))
-
-    def add_image_block(
+    def add_image(
         self,
         url: str,
         detail: Literal["low", "high"] | None = None,
     ) -> None:
-        """Append an image block to the message."""
         image_url: dict[str, object] = {"url": url}
         if detail is not None:
             image_url["detail"] = detail
 
-        self._blocks.append(ImageBlock(image_url=image_url))
+        self._ensure_blocks().append(ImageBlock(image_url=image_url))
 
-    def add_file_block(
+    def add_file(
         self,
         file_id: str,
         format: str = "application/pdf",
     ) -> None:
-        """Append a file reference block to the message."""
-        self._blocks.append(
+        self._ensure_blocks().append(
             FileBlock(
                 file={
                     "file_id": file_id,
@@ -124,75 +154,83 @@ class Message(BaseModel):
             )
         )
 
-    def data_from_content(self) -> dict[str, object] | list[object]:
-        """Parse message content as JSON and store it in `data`."""
-        if not isinstance(self.content, str):
-            raise TypeError("Content must be raw JSON string")
+    def _render(
+        self,
+        *,
+        data: dict[str, object] | None = None,
+        text_mode: bool = False,
+        tags: tuple[str, str] = ("<<", ">>"),
+    ) -> str | list[dict[str, object]]:
+        """Render content without mutating the original message."""
 
-        try:
-            parsed = json.loads(self.content)
-        except json.JSONDecodeError as exc:
-            raise ValueError("Failed to parse message content as JSON") from exc
-
-        self.data = parsed
-        return parsed
-
-    def format(self, data: dict[str, object]) -> None:
-        """Replace <<key>> placeholders in text content with values."""
-        if not data:
-            return
-
-        def replace(text: str) -> str:
-            for key, value in data.items():
-                text = text.replace(f"<<{key}>>", str(value))
-            return text
-
+        # Plain string content
         if isinstance(self.content, str):
-            self.content = replace(self.content)
-            return
+            return _format(
+                self.content,
+                data,
+                tags=tags,
+            )
 
-        for block in self._blocks:
+        rendered_blocks: list[ContentBlock] = []
+
+        for block in self.content:
             if isinstance(block, TextBlock):
-                block.text = replace(block.text)
+                rendered_blocks.append(
+                    block.model_copy(
+                        update={
+                            "text": _format(
+                                block.text,
+                                data,
+                                tags=tags,
+                            )
+                        }
+                    )
+                )
+            else:
+                rendered_blocks.append(block)
+
+        if text_mode:
+            return "\n\n".join(
+                b.text for b in rendered_blocks if isinstance(b, TextBlock)
+            )
+
+        return [b.core() for b in rendered_blocks]
 
     def core(
         self,
         *,
         text_mode: bool = False,
+        data: dict[str, object] | None = None,
+        tags: tuple[str, str] = ("<<", ">>"),
     ) -> dict[str, object]:
         """Return a LiteLLM-compatible message payload."""
-        if text_mode:
-            return {
-                "role": self.role,
-                "content": self.text,
-            }
-
-        if isinstance(self.content, list):
-            return {
-                "role": self.role,
-                "content": [b.core() for b in self.content],
-            }
 
         return {
             "role": self.role,
-            "content": self.content,
+            "content": self._render(
+                data=data,
+                text_mode=text_mode,
+                tags=tags,
+            ),
         }
 
     @classmethod
     def from_completion(cls, response: object) -> Message:
-        """Create a Message from a LiteLLM completion response."""
         data = _to_dict(response)
 
-        choices = data.pop("choices")
-        choice = choices[0]
+        choices = data.get("choices", [])
+        if not choices:
+            raise ValueError("Completion response contains no choices")
 
-        message = choice.pop("message")
-        content = message.pop("content", "")
-        role = message.pop("role", "assistant")
-        annotations = message.pop("annotations", None)
+        choice = choices[0].copy()
+        message = choice.get("message", {}).copy()
+
+        content = message.get("content", "")
+        role = message.get("role", "assistant")
+        annotations = message.get("annotations")
 
         stats = {
-            **data,
+            **{k: v for k, v in data.items() if k != "choices"},
             "choice": choice,
             "message": message,
         }
@@ -201,7 +239,7 @@ class Message(BaseModel):
             role=role,
             content=content,
             annotations=annotations,
-            stats=stats or None,
+            stats=stats,
         )
 
     @staticmethod
@@ -210,12 +248,35 @@ class Message(BaseModel):
         *,
         output_role: MessageRole = "user",
     ) -> Message:
-        """Merge multiple messages into a single formatted message."""
         parts = [f"{m.role}: {m.text}" for m in messages]
 
         return Message(
             role=output_role,
             content="\n\n---\n\n".join(parts),
+        )
+
+    @staticmethod
+    def from_chunks(
+        chunks: list[MessageChunk],
+    ) -> Message:
+        if not chunks:
+            raise ValueError("Cannot assemble Message from empty chunks")
+
+        content_parts: list[str] = []
+        annotations: list[dict[str, object]] = []
+
+        for chunk in chunks:
+            content_parts.append(chunk.text)
+            if chunk.annotations:
+                annotations.extend(chunk.annotations)
+
+        last_chunk = chunks[-1]
+
+        return Message(
+            role=last_chunk.role,
+            content="".join(content_parts),
+            annotations=annotations or None,
+            stats=last_chunk.stats,
         )
 
 
@@ -224,18 +285,20 @@ class MessageChunk(Message):
 
     @classmethod
     def from_completion(cls, response: object) -> MessageChunk:
-        """Create a MessageChunk from a streamed completion response."""
         data = _to_dict(response)
 
-        choices = data.pop("choices")
-        choice = choices[0]
-        delta = choice.pop("delta", {}) or {}
+        choices = data.get("choices", [])
+        if not choices:
+            raise ValueError("Streamed response contains no choices")
+
+        choice = choices[0].copy()
+        delta = choice.get("delta", {}) or {}
 
         content = delta.get("content", "")
-        annotations = delta.pop("annotations", None)
+        annotations = delta.get("annotations")
 
         stats = {
-            **data,
+            **{k: v for k, v in data.items() if k != "choices"},
             "choice": choice,
             "delta": delta,
         }
@@ -244,5 +307,5 @@ class MessageChunk(Message):
             role="assistant",
             content=content or "",
             annotations=annotations,
-            stats=stats or None,
+            stats=stats,
         )
