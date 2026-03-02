@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 from dataclasses import asdict
-from typing import Annotated, Literal, TypeAlias
+from pathlib import Path
+from typing import Annotated, BinaryIO, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -58,6 +61,47 @@ class ImageBlock(BaseModel):
     def core(self) -> dict[str, object]:
         return self.model_dump(exclude_none=True)
 
+    @classmethod
+    def from_file(
+        cls,
+        file: str | Path | bytes | BinaryIO,
+        *,
+        mime_type: str | None = None,
+        detail: Literal["low", "high"] | None = None,
+    ) -> ImageBlock:
+        """
+        Create an ImageBlock from an image file.
+
+        Accepts:
+            - file path (str or Path)
+            - raw bytes
+            - file-like object (BinaryIO)
+
+        The image will be encoded as base64 and stored as a data URL.
+        """
+
+        if isinstance(file, (str, Path)):
+            path = Path(file)
+            data = path.read_bytes()
+            if mime_type is None:
+                mime_type, _ = mimetypes.guess_type(path.name)
+        elif isinstance(file, bytes):
+            data = file
+        else:
+            data = file.read()
+
+        if mime_type is None:
+            mime_type = "application/octet-stream"
+
+        encoded = base64.b64encode(data).decode("utf-8")
+
+        image_url: dict[str, object] = {"url": f"data:{mime_type};base64,{encoded}"}
+
+        if detail is not None:
+            image_url["detail"] = detail
+
+        return cls(image_url=image_url)
+
 
 class FileBlock(BaseModel):
     type: Literal["file"] = "file"
@@ -65,6 +109,59 @@ class FileBlock(BaseModel):
 
     def core(self) -> dict[str, object]:
         return self.model_dump(exclude_none=True)
+
+    @classmethod
+    def from_url(cls, url: str) -> FileBlock:
+        """
+        Create a FileBlock referencing a remote file URL.
+        LiteLLM expects this under `file_id`.
+        """
+        return cls(file={"file_id": url})
+
+    @classmethod
+    def from_base64(
+        cls,
+        data: str,
+        *,
+        mime_type: str,
+    ) -> FileBlock:
+        """
+        Create a FileBlock from raw base64 string and MIME type.
+        Constructs the data URL internally.
+        """
+        base64_url = f"data:{mime_type};base64,{data}"
+        return cls(file={"file_data": base64_url})
+
+    @classmethod
+    def from_file(
+        cls,
+        file: str | Path | bytes | BinaryIO,
+        *,
+        mime_type: str | None = None,
+    ) -> FileBlock:
+        """
+        Create FileBlock from local file / bytes.
+        Encodes into base64 and delegates to from_base64().
+        """
+
+        # Read bytes
+        if isinstance(file, (str, Path)):
+            path = Path(file)
+            raw = path.read_bytes()
+            if mime_type is None:
+                mime_type, _ = mimetypes.guess_type(path.name)
+        elif isinstance(file, bytes):
+            raw = file
+        else:
+            raw = file.read()
+
+        if mime_type is None:
+            mime_type = "application/octet-stream"
+
+        encoded = base64.b64encode(raw).decode("utf-8")
+
+        # ✅ Reuse from_base64
+        return cls.from_base64(encoded, mime_type=mime_type)
 
 
 ContentBlock: TypeAlias = Annotated[
@@ -132,28 +229,78 @@ class Message(BaseModel):
 
     def add_image(
         self,
-        url: str,
+        *,
+        url: str | None = None,
+        file: str | Path | bytes | BinaryIO | None = None,
+        mime_type: str | None = None,
         detail: Literal["low", "high"] | None = None,
     ) -> None:
-        image_url: dict[str, object] = {"url": url}
-        if detail is not None:
-            image_url["detail"] = detail
+        """
+        Add an image to the message.
 
-        self._ensure_blocks().append(ImageBlock(image_url=image_url))
+        Priority:
+            1. url (if provided)
+            2. file (converted to base64)
+
+        Raises:
+            ValueError if neither url nor file is provided.
+        """
+        if url:
+            image_url: dict[str, object] = {"url": url}
+            if detail is not None:
+                image_url["detail"] = detail
+
+            block = ImageBlock(image_url=image_url)
+
+        elif file is not None:
+            block = ImageBlock.from_file(
+                file,
+                mime_type=mime_type,
+                detail=detail,
+            )
+        else:
+            raise ValueError("Either 'url' or 'file' must be provided")
+
+        self._ensure_blocks().append(block)
 
     def add_file(
         self,
-        file_id: str,
-        format: str = "application/pdf",
+        *,
+        url: str | None = None,
+        base64_data: str | None = None,
+        mime_type: str | None = None,
+        file: str | Path | bytes | BinaryIO | None = None,
     ) -> None:
-        self._ensure_blocks().append(
-            FileBlock(
-                file={
-                    "file_id": file_id,
-                    "format": format,
-                }
+        """
+        Add a file to the message.
+
+        Priority:
+            1. url
+            2. base64_data (+ mime_type required)
+            3. file (converted to base64)
+
+        Raises:
+            ValueError if invalid combination.
+        """
+
+        if url:
+            block = FileBlock.from_url(url)
+
+        elif base64_data:
+            if not mime_type:
+                raise ValueError("mime_type is required when using base64_data")
+            block = FileBlock.from_base64(
+                base64_data,
+                mime_type=mime_type,
             )
-        )
+
+        elif file is not None:
+            block = FileBlock.from_file(file)
+
+        else:
+            raise ValueError("Provide one of: url, base64_data (+ mime_type), or file")
+
+        self._ensure_blocks().append(block)
 
     def _render(
         self,
